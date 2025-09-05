@@ -104,7 +104,7 @@ INDIAN_INDICES = {
     "nifty": "^NSEI",
     "sensex": "^BSESN",
     "banknifty": "^NSEBANK",
-    "midcap_nifty": "NIFTYMIDCAP50.NS"  # Alternative symbol
+    "midcap_nifty": "NSEMDCP50"  # Alternative symbol
 }
 
 indian_symbols = [
