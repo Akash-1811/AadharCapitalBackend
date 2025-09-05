@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "builds": [
+    {
+      "src": "api/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": "."
+  },
+  "functions": {
+    "main.py": {
+      "maxDuration": 30
+    }
+  }
+}
