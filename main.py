@@ -99,6 +99,14 @@ def fetch_global_news():
         return []  # Return empty if nothing
 
 
+# Indian market indices with alternative symbols
+INDIAN_INDICES = {
+    "nifty": "^NSEI",
+    "sensex": "^BSESN",
+    "banknifty": "^NSEBANK",
+    "midcap_nifty": "NIFTYMIDCAP50.NS"  # Alternative symbol
+}
+
 indian_symbols = [
     "RELIANCE.NS",
     "TCS.NS",
@@ -121,6 +129,77 @@ indian_symbols = [
     "POWERGRID.NS",
     "ONGC.NS",
 ]
+
+
+def fetch_indian_indices():
+    """Fetch current data for Indian market indices - show blank when unavailable"""
+    try:
+        indices_data = {}
+
+        for index_name, symbol in INDIAN_INDICES.items():
+            try:
+                # Try to get real data
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period="2d")
+
+                if not hist.empty and len(hist) >= 1:
+                    current_price = hist['Close'].iloc[-1]
+
+                    # Calculate change if we have previous day data
+                    if len(hist) >= 2:
+                        prev_close = hist['Close'].iloc[-2]
+                        change = current_price - prev_close
+                        change_percent = (change / prev_close) * 100 if prev_close != 0 else 0
+                    else:
+                        prev_close = current_price
+                        change = 0
+                        change_percent = 0
+
+                    indices_data[index_name] = {
+                        "symbol": symbol,
+                        "name": index_name.replace("_", " ").title(),
+                        "current_price": round(float(current_price), 2),
+                        "previous_close": round(float(prev_close), 2),
+                        "change": round(float(change), 2),
+                        "change_percent": round(float(change_percent), 2),
+                        "volume": int(hist['Volume'].iloc[-1]) if 'Volume' in hist.columns and not hist['Volume'].empty else 0,
+                        "status": "live_data"
+                    }
+                    logger.info(f"Successfully fetched live data for {index_name}")
+                else:
+                    # Return blank/empty structure when no data available
+                    indices_data[index_name] = {
+                        "symbol": symbol,
+                        "name": index_name.replace("_", " ").title(),
+                        "current_price": None,
+                        "previous_close": None,
+                        "change": None,
+                        "change_percent": None,
+                        "volume": None,
+                        "status": "no_data"
+                    }
+                    logger.warning(f"No historical data available for {index_name}")
+
+            except Exception as e:
+                # Return blank/empty structure when error occurs
+                indices_data[index_name] = {
+                    "symbol": symbol,
+                    "name": index_name.replace("_", " ").title(),
+                    "current_price": None,
+                    "previous_close": None,
+                    "change": None,
+                    "change_percent": None,
+                    "volume": None,
+                    "status": "error"
+                }
+                logger.warning(f"Error fetching data for {index_name}: {e}")
+
+        logger.info(f"Successfully processed data for {len(indices_data)} indices")
+        return indices_data
+
+    except Exception as e:
+        logger.error(f"Error fetching Indian indices: {e}")
+        return {}
 
 
 def fetch_indian_news(symbols):
@@ -285,8 +364,14 @@ async def add_to_google_sheet(form_data: dict):
 @app.get("/")
 def root():
     return {
-        "message": "Market Overview API",
-        "version": "1.0.0",
+        "message": "Market Overview API with Indian Indices",
+        "version": "2.0.0",
+        "features": [
+            "Indian Market Indices (Nifty, Sensex, Bank Nifty, Midcap Nifty)",
+            "Top 5 Gainers/Losers (Global & India)",
+            "Financial News (Global & India)",
+            "Dynamic Form Submissions with HTML Email"
+        ],
         "endpoints": {
             "market_summary": "/market-summary",
             "submit_form": "/submit-form (POST)",
@@ -298,19 +383,30 @@ def root():
 
 @app.get("/market-summary")
 def market_summary():
-    """Get market summary with top gainers/losers and news"""
+    """Get market summary with Indian indices, top gainers/losers and news"""
     try:
+        # Fetch Indian market indices
+        indian_indices = fetch_indian_indices()
+
+        # Fetch top gainers/losers
         top5_gainers_global = fetch_top_stocks(region_filter=None, gainers=True)
         top5_losers_global = fetch_top_stocks(region_filter=None, gainers=False)
         top5_gainers_india = fetch_top_stocks(region_filter="in", gainers=True)
         top5_losers_india = fetch_top_stocks(region_filter="in", gainers=False)
 
+        # Fetch news
         global_news = fetch_global_news()
         indian_news = fetch_indian_news(indian_symbols)
 
         return {
             "success": True,
             "data": {
+                "indian_indices": {
+                    "nifty": indian_indices.get("nifty", {}),
+                    "sensex": indian_indices.get("sensex", {}),
+                    "banknifty": indian_indices.get("banknifty", {}),
+                    "midcap_nifty": indian_indices.get("midcap_nifty", {})
+                },
                 "top5_gainers_global": top5_gainers_global,
                 "top5_losers_global": top5_losers_global,
                 "top5_gainers_india": top5_gainers_india,
@@ -320,7 +416,7 @@ def market_summary():
             },
             "timestamp": datetime.now().isoformat()
         }
-    
+
     except Exception as e:
         logger.error(f"Error in market summary: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch market data: {str(e)}")
