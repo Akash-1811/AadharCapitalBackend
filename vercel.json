@@ -1,8 +1,8 @@
 {
-  "version": 1,
+  "version": 2,
   "builds": [
     {
-      "src": "api/main.py",
+      "src": "main.py",
       "use": "@vercel/python"
     }
   ],
@@ -11,13 +11,5 @@
       "src": "/(.*)",
       "dest": "main.py"
     }
-  ],
-  "env": {
-    "PYTHONPATH": "."
-  },
-  "functions": {
-    "main.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
