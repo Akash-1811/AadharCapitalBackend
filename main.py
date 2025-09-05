@@ -38,8 +38,8 @@ app.add_middleware(
 EMAIL_CONFIG = {
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,
-    "email": os.getenv("EMAIL_ADDRESS", "akash.yadavv181198@gmail.com"),
-    "password": os.getenv("EMAIL_PASSWORD", "tmnsodotbingfaqo"),
+    "email": os.getenv("EMAIL_ADDRESS", "Aadhaarcapital25@gmail.com"),
+    "password": os.getenv("EMAIL_PASSWORD", "iymhotiayuavmnbs"),
 }
 
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1tGgnMQWpX19Us7H0c_Sx8s9SkmeTZCs8fekQIl3qJL4")
@@ -104,7 +104,7 @@ INDIAN_INDICES = {
     "nifty": "^NSEI",
     "sensex": "^BSESN",
     "banknifty": "^NSEBANK",
-    "midcap_nifty": "NSEMDCP50"  # Alternative symbol
+    "midcap_nifty": "NSEMDCP50"
 }
 
 indian_symbols = [
