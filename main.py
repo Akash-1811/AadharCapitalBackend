@@ -36,11 +36,11 @@ app.add_middleware(
 EMAIL_CONFIG = {
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,
-    "email": os.getenv("EMAIL_ADDRESS", "Aadhaarcapital25@gmail.com"),
-    "password": os.getenv("EMAIL_PASSWORD", "iymhotiayuavmnbs"),
+    "email": "Aadhaarcapital25@gmail.com",
+    "password": "iymhotiayuavmnbs",
 }
 
-GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "1tGgnMQWpX19Us7H0c_Sx8s9SkmeTZCs8fekQIl3qJL4")
+GOOGLE_SHEET_ID = "1tGgnMQWpX19Us7H0c_Sx8s9SkmeTZCs8fekQIl3qJL4"
 
 
 def fetch_top_stocks(region_filter=None, gainers=True):
@@ -369,7 +369,7 @@ async def send_email(subject: str, form_data: dict):
 async def add_to_google_sheet(form_data: dict):
     """Add dynamic form data to Google Sheet"""
     try:
-        service_account_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        service_account_path = "GOOGLE_SERVICE_ACCOUNT_JSON"
 
         if not service_account_path or not os.path.exists(service_account_path):
             logger.info("Google Sheets credentials not configured - logging form data instead")
