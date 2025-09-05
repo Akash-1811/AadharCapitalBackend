@@ -15,8 +15,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import gspread
 import os
-# Removed mangum - not needed for Vercel
-
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +51,7 @@ def fetch_top_stocks(region_filter=None, gainers=True):
             filters.append(["gt", ["percentchange", 3]])
         else:
             filters.append(["lt", ["percentchange", -2.5]])
-        
+
         market_cap_threshold = 2e9 if region_filter is None else 1e9
         price_threshold = 5 if region_filter is None else 10
 
@@ -68,9 +66,9 @@ def fetch_top_stocks(region_filter=None, gainers=True):
         payload = yfs.create_payload("equity", query)
         data = yfs.get_data(payload)
         data_sorted = data.sort_values("regularMarketChangePercent.raw", ascending=not gainers)
-        
+
         return data_sorted.head(5)[["symbol", "regularMarketPrice.raw", "regularMarketChangePercent.raw", "regularMarketVolume.raw"]].to_dict(orient="records")
-    
+
     except Exception as e:
         logger.error(f"Error fetching stocks: {e}")
         return []
@@ -86,7 +84,6 @@ def fetch_global_news():
         global_news = []
         for article in news:
             content = article.get("content", {})
-            region = content.get("canonicalUrl", {}).get("region", "")
             title = content.get("title", "Title not found")
             publisher = content.get("provider", {}).get("displayName", "Unknown")
             link = content.get("canonicalUrl", {}).get("url", "No link")
@@ -104,8 +101,9 @@ INDIAN_INDICES = {
     "nifty": "^NSEI",
     "sensex": "^BSESN",
     "banknifty": "^NSEBANK",
-    "midcap_nifty": "NSEMDCP50"
+    "midcap_nifty": "^NSEMDCP50"  # Use caret-prefixed index symbol and fallback to history()
 }
+
 
 indian_symbols = [
     "RELIANCE.NS",
@@ -131,57 +129,116 @@ indian_symbols = [
 ]
 
 
+def get_index_data(symbol: str, name: str) -> Dict:
+    """
+    Robust index fetcher:
+    - Try ticker.fast_info for live values (works for many indices)
+    - Fallback to ticker.history() when fast_info / live data not available (Midcap)
+    - Return standardized dict with status
+    """
+    ticker = yf.Ticker(symbol)
+    current_price = None
+    previous_close = None
+    volume = None
+    status = "no_data"
+
+    try:
+        # Try fast_info (some tickers / indices provide it)
+        fast_info = getattr(ticker, "fast_info", None)
+        if fast_info and isinstance(fast_info, dict):
+            # fast_info may be dict-like
+            current_price = fast_info.get("last_price") or fast_info.get("lastTradePrice")
+            previous_close = fast_info.get("previous_close")
+            volume = fast_info.get("volume", 0)
+            if current_price is not None:
+                status = "live_data"
+        else:
+            # safe attempt: fast_info might raise or not exist
+            try:
+                fi = ticker.fast_info
+                # If we got here, fi is probably a mapping-like object
+                current_price = fi.get("last_price") if hasattr(fi, "get") else getattr(fi, "last_price", None)
+                previous_close = fi.get("previous_close") if hasattr(fi, "get") else getattr(fi, "previous_close", None)
+                volume = fi.get("volume", 0) if hasattr(fi, "get") else getattr(fi, "volume", 0)
+                if current_price is not None:
+                    status = "live_data"
+            except Exception:
+                # not all tickers expose fast_info; we'll fallback to history()
+                pass
+
+        # If we don't have live_price, use history fallback
+        if current_price is None:
+            hist = ticker.history(period="2d")
+            if hist is not None and not hist.empty:
+                # If only one row exists, use it as current and previous_close == current
+                if len(hist) >= 2:
+                    previous_close = float(hist["Close"].iloc[-2])
+                else:
+                    previous_close = float(hist["Close"].iloc[-1])
+                current_price = float(hist["Close"].iloc[-1])
+                # volume may or may not be present
+                if "Volume" in hist.columns and not hist["Volume"].empty:
+                    try:
+                        volume = int(hist["Volume"].iloc[-1])
+                    except Exception:
+                        volume = None
+                status = "history_data"
+
+    except Exception as e:
+        logger.exception(f"Error fetching index {name} ({symbol}): {e}")
+        return {
+            "symbol": symbol,
+            "name": name,
+            "current_price": None,
+            "previous_close": None,
+            "change": None,
+            "change_percent": None,
+            "volume": None,
+            "status": "error"
+        }
+
+    # Calculate change & percent safely
+    change = None
+    change_percent = None
+    try:
+        if current_price is not None and previous_close is not None:
+            change = float(current_price) - float(previous_close)
+            if previous_close != 0:
+                change_percent = (change / float(previous_close)) * 100
+    except Exception:
+        change = None
+        change_percent = None
+
+    # Round numeric values for neatness (when present)
+    def _round(val, ndigits=2):
+        try:
+            return round(float(val), ndigits)
+        except Exception:
+            return val
+
+    return {
+        "symbol": symbol,
+        "name": name,
+        "current_price": _round(current_price) if current_price is not None else None,
+        "previous_close": _round(previous_close) if previous_close is not None else None,
+        "change": _round(change) if change is not None else None,
+        "change_percent": _round(change_percent) if change_percent is not None else None,
+        "volume": int(volume) if isinstance(volume, (int, float)) else volume,
+        "status": status
+    }
+
+
 def fetch_indian_indices():
-    """Fetch current data for Indian market indices - show blank when unavailable"""
+    """Fetch current data for Indian market indices - uses get_index_data fallback logic"""
     try:
         indices_data = {}
-
         for index_name, symbol in INDIAN_INDICES.items():
             try:
-                # Try to get real data
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(period="2d")
-
-                if not hist.empty and len(hist) >= 1:
-                    current_price = hist['Close'].iloc[-1]
-
-                    # Calculate change if we have previous day data
-                    if len(hist) >= 2:
-                        prev_close = hist['Close'].iloc[-2]
-                        change = current_price - prev_close
-                        change_percent = (change / prev_close) * 100 if prev_close != 0 else 0
-                    else:
-                        prev_close = current_price
-                        change = 0
-                        change_percent = 0
-
-                    indices_data[index_name] = {
-                        "symbol": symbol,
-                        "name": index_name.replace("_", " ").title(),
-                        "current_price": round(float(current_price), 2),
-                        "previous_close": round(float(prev_close), 2),
-                        "change": round(float(change), 2),
-                        "change_percent": round(float(change_percent), 2),
-                        "volume": int(hist['Volume'].iloc[-1]) if 'Volume' in hist.columns and not hist['Volume'].empty else 0,
-                        "status": "live_data"
-                    }
-                    logger.info(f"Successfully fetched live data for {index_name}")
-                else:
-                    # Return blank/empty structure when no data available
-                    indices_data[index_name] = {
-                        "symbol": symbol,
-                        "name": index_name.replace("_", " ").title(),
-                        "current_price": None,
-                        "previous_close": None,
-                        "change": None,
-                        "change_percent": None,
-                        "volume": None,
-                        "status": "no_data"
-                    }
-                    logger.warning(f"No historical data available for {index_name}")
-
+                # Use the robust helper
+                indices_data[index_name] = get_index_data(symbol, index_name.replace("_", " ").title())
+                logger.info(f"Fetched data for {index_name}: status={indices_data[index_name].get('status')}")
             except Exception as e:
-                # Return blank/empty structure when error occurs
+                logger.exception(f"Error fetching data for {index_name} ({symbol}): {e}")
                 indices_data[index_name] = {
                     "symbol": symbol,
                     "name": index_name.replace("_", " ").title(),
@@ -192,11 +249,7 @@ def fetch_indian_indices():
                     "volume": None,
                     "status": "error"
                 }
-                logger.warning(f"Error fetching data for {index_name}: {e}")
-
-        logger.info(f"Successfully processed data for {len(indices_data)} indices")
         return indices_data
-
     except Exception as e:
         logger.error(f"Error fetching Indian indices: {e}")
         return {}
@@ -248,7 +301,7 @@ async def send_email(subject: str, form_data: dict):
         msg['From'] = "akash.yadavv181198@gmail.com"
         msg['To'] = "support@aadhaarcapital.com"  # Same sender and receiver
         msg['Subject'] = subject
-        
+
         # Create HTML table for form data
         table_rows = ""
         for key, value in form_data.items():
@@ -295,10 +348,10 @@ async def send_email(subject: str, form_data: dict):
         """
 
         msg.attach(MIMEText(html_body, 'html'))
-        
+
         server = smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"])
         server.starttls()
-        
+
         if EMAIL_CONFIG["password"]:
             server.login(EMAIL_CONFIG["email"], EMAIL_CONFIG["password"])
             server.send_message(msg)
@@ -307,7 +360,7 @@ async def send_email(subject: str, form_data: dict):
         else:
             logger.warning("Email password not configured")
             return False
-            
+
     except Exception as e:
         logger.error(f"Error sending email: {e}")
         return False
