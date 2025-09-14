@@ -40,6 +40,13 @@ EMAIL_CONFIG = {
     "password": "iymhotiayuavmnbs",
 }
 
+EMAIL_CONFIG_AKASH = {
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "email": "akash.yadavv181198@gmail.com",
+    "password": "plcnrjmsdhhhvzza",
+}
+
 GOOGLE_SHEET_ID = "1tGgnMQWpX19Us7H0c_Sx8s9SkmeTZCs8fekQIl3qJL4"
 
 
@@ -299,7 +306,7 @@ async def send_email(subject: str, form_data: dict):
     try:
         msg = MIMEMultipart()
         msg['From'] = "akash.yadavv181198@gmail.com"
-        msg['To'] = "support@aadhaarcapital.com"  # Same sender and receiver
+        msg['To'] = "support@aadhaarcapital.com"  
         msg['Subject'] = subject
 
         # Create HTML table for form data
@@ -354,6 +361,78 @@ async def send_email(subject: str, form_data: dict):
 
         if EMAIL_CONFIG["password"]:
             server.login(EMAIL_CONFIG["email"], EMAIL_CONFIG["password"])
+            server.send_message(msg)
+            server.quit()
+            return True
+        else:
+            logger.warning("Email password not configured")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error sending email: {e}")
+        return False
+
+
+async def send_email_akash(subject: str, form_data: dict):
+    """Send email with form data"""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = "akash.yadavv181198@gmail.com"
+        msg['To'] = "support@aadhaarcapital.com"  
+        msg['Subject'] = subject
+
+        # Create HTML table for form data
+        table_rows = ""
+        for key, value in form_data.items():
+            # Format key to be more readable (capitalize and replace underscores)
+            formatted_key = key.replace("_", " ").title()
+            table_rows += f"""
+            <tr>
+                <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold;">{formatted_key}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{value}</td>
+            </tr>"""
+
+        html_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #2c3e50;">Hello Aadhar Capital Team,</h2>
+
+            <p>You have received a new enquiry from your website.</p>
+
+            <h3 style="color: #34495e;">Form Details:</h3>
+
+            <table style="border-collapse: collapse; width: 100%; max-width: 600px; margin: 20px 0;">
+                <thead>
+                    <tr style="background-color: #3498db; color: white;">
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Field</th>
+                        <th style="padding: 12px; border: 1px solid #ddd; text-align: left;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows}
+                </tbody>
+            </table>
+
+            <p style="margin-top: 30px; padding: 15px; background-color: #ecf0f1; border-left: 4px solid #3498db;">
+                <strong>Submitted at:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            </p>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #bdc3c7;">
+
+            <p style="font-size: 12px; color: #7f8c8d;">
+                This email was automatically generated from your website contact form.
+            </p>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html_body, 'html'))
+
+        server = smtplib.SMTP(EMAIL_CONFIG_AKASH["smtp_server"], EMAIL_CONFIG_AKASH["smtp_port"])
+        server.starttls()
+
+        if EMAIL_CONFIG_AKASH["password"]:
+            server.login(EMAIL_CONFIG_AKASH["email"], EMAIL_CONFIG_AKASH["password"])
             server.send_message(msg)
             server.quit()
             return True
@@ -494,6 +573,45 @@ async def submit_form(request: Request):
         subject = form_data.get("subject", "Aadhar Capital Website Enquiry")
 
         email_sent = await send_email(
+            subject=f"{subject}",
+            form_data=form_data
+        )
+
+        # sheet_added = await add_to_google_sheet(form_data)
+
+        return {
+            "success": True,
+            "message": "Form submitted successfully",
+            "email_sent": email_sent,
+            # "sheet_updated": sheet_added,
+            "timestamp": datetime.now().isoformat(),
+            "data": form_data
+        }
+
+    except Exception as e:
+        logger.error(f"Error submitting form: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit form: {str(e)}")
+
+
+@app.post("/submit-form-akash")
+async def submit_form_akash(request: Request):
+    """Submit dynamic form data - accepts any fields, sends email and adds to Google Sheet"""
+    try:
+        # Get form data from request
+        form = await request.form()
+
+        # Convert form data to dictionary
+        form_data = {}
+        for key, value in form.items():
+            form_data[key] = value if value else "Not provided"
+
+        # Add timestamp
+        form_data["timestamp"] = datetime.now().isoformat()
+
+        # Get subject for email (default if not provided)
+        subject = form_data.get("subject", "Enquiry from Akash's Portfolio Website")
+
+        email_sent = await send_email_akash(
             subject=f"{subject}",
             form_data=form_data
         )
