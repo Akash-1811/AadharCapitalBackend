@@ -395,7 +395,7 @@ async def send_email_akash(subject: str, form_data: dict):
         html_body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #2c3e50;">Hello Aadhar Capital Team,</h2>
+            <h2 style="color: #2c3e50;">Hello Akash,</h2>
 
             <p>You have received a new enquiry from your website.</p>
 
