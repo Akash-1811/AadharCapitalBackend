@@ -305,7 +305,7 @@ async def send_email(subject: str, form_data: dict):
     """Send email with form data"""
     try:
         msg = MIMEMultipart()
-        msg['From'] = "akash.yadavv181198@gmail.com"
+        msg['From'] = "Aadhaarcapital25@gmail.com"
         msg['To'] = "support@aadhaarcapital.com"  
         msg['Subject'] = subject
 
@@ -378,7 +378,7 @@ async def send_email_akash(subject: str, form_data: dict):
     try:
         msg = MIMEMultipart()
         msg['From'] = "akash.yadavv181198@gmail.com"
-        msg['To'] = "support@aadhaarcapital.com"  
+        msg['To'] = "akashyadav181198@gmail.com"  
         msg['Subject'] = subject
 
         # Create HTML table for form data
